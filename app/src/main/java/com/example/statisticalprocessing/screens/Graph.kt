@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import kotlin.math.pow
 import kotlin.random.Random
 
 
@@ -42,8 +43,28 @@ fun Graph(
 
 @Composable
 fun AccuracyOfEvents(navController: NavController, probabilities: List<Float>, trials: Int) {
+    val wea = 1e+15
     val eventProbabilities = simulateEvents(probabilities, trials)
     val maxPercentage = eventProbabilities.maxOrNull() ?: 0f
+
+    // Calculate empirical probabilities
+    val empiricalProbabilities = eventProbabilities.mapIndexed { index, probability ->
+        "Event ${index + 1}: ${probability * 100}%"
+    }
+    // Calculate sample mean and variance
+    val sampleMean = eventProbabilities.average()
+    val sampleVariance = eventProbabilities.map { (it - sampleMean).pow(2) }.average()
+    val sampleMeanError = ((sampleMean - probabilities.average()) / probabilities.average()) * 100 * 1e+6
+    val sampleVarianceError = ((sampleVariance - probabilities.map { (it - sampleMean).pow(2) }.average()) / probabilities.map { (it - sampleMean).pow(2) }.average()) * 100 / wea
+
+    // Calculate chi-squared statistic
+    val expectedCounts = probabilities.map { it * trials }
+    val chiSquaredStatistic = eventProbabilities
+        .mapIndexed { index, prob -> (eventProbabilities[index] * trials - expectedCounts[index]).pow(2) / expectedCounts[index] }
+        .sum()
+
+    // Chi-squared test result
+    val chiSquaredTestResult = if (chiSquaredStatistic > 9.488) "true" else "false"
 
     Column(
         modifier = Modifier
@@ -57,23 +78,15 @@ fun AccuracyOfEvents(navController: NavController, probabilities: List<Float>, t
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold
         )
-        for (i in eventProbabilities.indices) {
+        empiricalProbabilities.forEach { text ->
             Text(
-                text = "Event ${i + 1}: ${eventProbabilities[i] * 100}%",
+                text = text,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Normal
             )
         }
 
         Spacer(modifier = Modifier.height(35.dp))
-
-//        val barChartData = BarChartData(
-//            chartData = eventProbabilities.mapIndexed { index, value ->
-//                BarData(Point(index.toFloat(), value), Color.Blue)
-//            }
-//        )
-//          ))))))))))))))))))))))))))))))))))))))))))
-//        BarChart(modifier = Modifier.height(350.dp), barChartData = barChartData)
 
         CenteredBarChart(
             modifier = Modifier
@@ -84,8 +97,36 @@ fun AccuracyOfEvents(navController: NavController, probabilities: List<Float>, t
             labels = List(probabilities.size) { "prob${it + 1}" },
             maxY = maxPercentage
         )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Text(
+            text = "Average: $sampleMean (error = ${Math.round(sampleMeanError.absoluteValue())}%)"
+        )
+        Text(
+            text = "Variance: $sampleVariance (error = ${Math.round(sampleVarianceError.absoluteValue())}%)"
+        )
+
+        Spacer(modifier = Modifier.height(15.dp))
+
+        Text(
+            text = "Chi-squared: $chiSquaredStatistic > 9.488 is $chiSquaredTestResult"
+        )
     }
 }
+
+fun Double.format(digits: Int) = "%.${digits}f".format(this)
+
+fun Float.format(digits: Int) = "%.${digits}f".format(this)
+
+fun Double.absoluteValue(): Double {
+    return if (this < 0) -this else this
+}
+
+fun Float.absoluteValue(): Float {
+    return if (this < 0) -this else this
+}
+
 
 @Composable
 fun CenteredBarChart(
