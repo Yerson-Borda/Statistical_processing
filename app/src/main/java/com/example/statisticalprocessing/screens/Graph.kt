@@ -26,7 +26,6 @@ import androidx.navigation.NavController
 import kotlin.math.pow
 import kotlin.random.Random
 
-
 @Composable
 fun Graph(
     navController: NavController,
@@ -43,7 +42,6 @@ fun Graph(
 
 @Composable
 fun AccuracyOfEvents(navController: NavController, probabilities: List<Float>, trials: Int) {
-    val wea = 1e+15
     val eventProbabilities = simulateEvents(probabilities, trials)
     val maxPercentage = eventProbabilities.maxOrNull() ?: 0f
 
@@ -51,11 +49,21 @@ fun AccuracyOfEvents(navController: NavController, probabilities: List<Float>, t
     val empiricalProbabilities = eventProbabilities.mapIndexed { index, probability ->
         "Event ${index + 1}: ${probability * 100}%"
     }
-    // Calculate sample mean and variance
-    val sampleMean = eventProbabilities.average()
-    val sampleVariance = eventProbabilities.map { (it - sampleMean).pow(2) }.average()
-    val sampleMeanError = ((sampleMean - probabilities.average()) / probabilities.average()) * 100 * 1e+6
-    val sampleVarianceError = ((sampleVariance - probabilities.map { (it - sampleMean).pow(2) }.average()) / probabilities.map { (it - sampleMean).pow(2) }.average()) * 100 / wea
+    // Calculate sample mean and variance using empirical probabilities
+    val sampleMean = empiricalProbabilities.mapIndexed { index, empiricalProbability ->
+        empiricalProbability.substringAfter(":").trim().replace("%", "").toFloat() / 100 * (index + 1)
+    }.sum()
+
+    val sampleVariance = empiricalProbabilities.mapIndexed { index, empiricalProbability ->
+        val empiricalProb = empiricalProbability.substringAfter(":").trim().replace("%", "").toFloat() / 100
+        empiricalProb * (index + 1) * (index + 1)
+    }.sum() - sampleMean * sampleMean
+
+    // Calculate relative errors for sample mean and variance
+    val sampleMeanError = ((sampleMean - probabilities.indices.sumOf { ((it + 1) * probabilities[it]).toDouble() }) /
+            (probabilities.indices.sumOf { ((it + 1) * probabilities[it]).toDouble() } / trials))
+
+    val sampleVarianceError = ((sampleVariance - probabilities.mapIndexed { index, p -> (index + 1) * (index + 1) * p }.sum()) / probabilities.mapIndexed { index, p -> (index + 1) * (index + 1) * p }.sum())
 
     // Calculate chi-squared statistic
     val expectedCounts = probabilities.map { it * trials }
